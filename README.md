@@ -34,6 +34,22 @@
 
 > **OpenClaude / 龙虾 / Coze / GPTs 装机文档**：留 v0.2 跟着 OpenAPI yaml 一起发布。
 
+### 🌏 国内用户走 Gitee 镜像
+
+GitHub 在国内访问不稳定时，把所有装机命令里的 GitHub URL 换成 Gitee 镜像：
+
+```bash
+# GitHub（国外速度快）
+npx -y github:wukongai/pudding-user-skill
+
+# Gitee 镜像（国内速度快，等价）
+npx -y https://gitee.com/teacherai/pudding-user-skill.git
+```
+
+> ⚠️ `npx` 原生支持 `github:` 缩写，但**不支持 `gitee:` 缩写** — 用 Gitee 必须写完整 https URL。
+>
+> 镜像同步：Phase 4 会加 GitHub Action 自动同步。当前 v0.1 由维护者手动 `git push gitee master`，可能滞后几小时；通常版本号有变化前不影响装机体验。
+
 ## 🔑 获取你的认证字符串（token）
 
 > ⚠️ Phase 3 完成前，学员管理 UI `/profile/ai-access` 还没上线。当前临时用 curl 走后端 API 生成。

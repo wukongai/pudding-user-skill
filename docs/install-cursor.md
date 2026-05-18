@@ -26,12 +26,31 @@
 
 ### 方式 B：直接编辑 ~/.cursor/mcp.json
 
+**国外**：
+
 ```json
 {
   "mcpServers": {
     "pudding": {
       "command": "npx",
       "args": ["-y", "github:wukongai/pudding-user-skill"],
+      "env": {
+        "PUDDING_API_URL": "https://aixiaoai.cloud",
+        "PUDDING_MCP_TOKEN": "<你的 token>"
+      }
+    }
+  }
+}
+```
+
+**国内**（Gitee 镜像）：
+
+```json
+{
+  "mcpServers": {
+    "pudding": {
+      "command": "npx",
+      "args": ["-y", "https://gitee.com/teacherai/pudding-user-skill.git"],
       "env": {
         "PUDDING_API_URL": "https://aixiaoai.cloud",
         "PUDDING_MCP_TOKEN": "<你的 token>"

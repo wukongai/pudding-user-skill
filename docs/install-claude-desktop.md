@@ -22,12 +22,31 @@ Claude Desktop 至少 0.7.0+（支持 MCP）。打开 App → 顶栏 Claude → 
 
 文件可能不存在，自己创建。粘贴：
 
+**国外（推荐）**：
+
 ```json
 {
   "mcpServers": {
     "pudding": {
       "command": "npx",
       "args": ["-y", "github:wukongai/pudding-user-skill"],
+      "env": {
+        "PUDDING_API_URL": "https://aixiaoai.cloud",
+        "PUDDING_MCP_TOKEN": "<把你的 token 粘到这里>"
+      }
+    }
+  }
+}
+```
+
+**国内**（GitHub 不稳时走 Gitee 镜像，等价）：
+
+```json
+{
+  "mcpServers": {
+    "pudding": {
+      "command": "npx",
+      "args": ["-y", "https://gitee.com/teacherai/pudding-user-skill.git"],
       "env": {
         "PUDDING_API_URL": "https://aixiaoai.cloud",
         "PUDDING_MCP_TOKEN": "<把你的 token 粘到这里>"

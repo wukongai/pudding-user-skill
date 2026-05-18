@@ -22,10 +22,17 @@ claude auth login
 一行命令搞定：
 
 ```bash
+# 国外（推荐，速度快）
 claude mcp add pudding \
   --env PUDDING_API_URL=https://aixiaoai.cloud \
   --env PUDDING_MCP_TOKEN=<把第二步拿到的 token 粘贴这里> \
   -- npx -y github:wukongai/pudding-user-skill
+
+# 国内（GitHub 不稳时走 Gitee 镜像，等价）
+claude mcp add pudding \
+  --env PUDDING_API_URL=https://aixiaoai.cloud \
+  --env PUDDING_MCP_TOKEN=<把第二步拿到的 token 粘贴这里> \
+  -- npx -y https://gitee.com/teacherai/pudding-user-skill.git
 ```
 
 > 说明：
