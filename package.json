@@ -1,6 +1,6 @@
 {
   "name": "pudding-user-skill",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "布丁学员的对话式 AI 入口 — 让 Claude / Cursor 等 AI 客户端通过自然语言直接调你的学习账号（查营进度 / 今日打卡 / 提交打卡 / 能力雷达 / 关卡详情 / 通知）",
   "type": "module",
   "main": "src/index.js",

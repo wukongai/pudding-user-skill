@@ -81,6 +81,97 @@ npx -y https://gitee.com/teacherai/pudding-user-skill.git
 
 ⚠️ **submit_checkin v1 极简版**：v1 只记录笔记 + 更新连续天数，**不算积分 / 不发勋章 / 不算关卡解锁**。学员下次浏览器内打卡时会一并补算。完整业务接入留 v2（布丁后端抽 `lib/checkin-service.js` 后实施）。
 
+## 📦 返回数据形态（快速参考）
+
+> 完整 JSON schema + 字段不变量见 [SKILL.md § 返回数据形态](SKILL.md#返回数据形态)。本节给关键 3 个 tool 的精简示例。
+
+### `get_my_camps`
+
+```json
+{
+  "camps": [
+    {
+      "id": "cm9xyz...",
+      "name": "TA 沟通分析",
+      "currentStage": 6,
+      "totalStages": 10,
+      "progress": 60,
+      "streakDays": 7,
+      "status": "ongoing"
+    }
+  ]
+}
+```
+
+- `status` 枚举：`ongoing` / `graduated` / `markedForRevisit`
+- `progress`：0-100 整数
+
+### `get_stage`
+
+```json
+{
+  "stage": {
+    "id": "cm9stage...",
+    "title": "第 6 关 · ...",
+    "tasks": [
+      { "id": "cm9task...", "title": "...", "type": "quiz", "difficulty": "basic" }
+    ]
+  }
+}
+```
+
+- `tasks[].id` 是 cuid，**`submit_checkin.completedTaskIds` 必须从这里拿**
+- `tasks[].difficulty` 枚举：`basic` / `intermediate` / `full`
+
+### `submit_checkin`
+
+```json
+{
+  "checkin": { "id": "...", "createdAt": "2026-05-18T10:30:00.000Z" },
+  "streakDays": 8,
+  "_v1_note": "本次只记录笔记 + 更新连续天数..."
+}
+```
+
+## 🚨 常见错误排查
+
+> 完整错误码表 + AI 应答模板见 [SKILL.md § 常见错误处理](SKILL.md#常见错误处理)。本节给学员装机/使用时最常见的 4 种情况。
+
+### MCP 列表显示 `pudding: failed`
+
+启动失败，原因通常是 `PUDDING_MCP_TOKEN` 没配或配错。
+
+**自助排查**：
+
+1. 看 AI 客户端 MCP 日志，搜 `Missing required env: PUDDING_MCP_TOKEN` — 没配 token
+2. 看日志有没有 `401 / MCP 认证字符串无效` — token 撤销或失效，重新生成
+3. 看 `PUDDING_API_URL` 是不是 `https://aixiaoai.cloud`（默认就是，一般不动）
+
+### AI 回复"你的布丁 AI 入口好像失效了"
+
+后端返回 HTTP 401。原因：token 在主站被撤销 / 过期。
+
+**自助修复**：
+
+1. 去 https://aixiaoai.cloud 个人中心 → AI 接入 → 撤销旧的 endpoint
+2. 重新生成新 endpoint 拿新 token
+3. 更新 AI 客户端 env 里的 `PUDDING_MCP_TOKEN` → 重启客户端
+
+### AI 回复"打卡提交被布丁拒绝了，原因 ..."
+
+后端返回 HTTP 400。原因：通常是 AI 编造了 task ID 或漏填 reflection / question。
+
+**自助修复**：让 AI 重新走"打卡严格前置流程"——先 `get_my_camps` → 选营 → `get_stage` 拿真实 task → 你勾选 → 再调 `submit_checkin`。
+
+### AI 回复"今天的调用次数到上限了"
+
+后端返回 HTTP 429。该 endpoint 当天调用超过 dailyLimit（默认 500 次/天）。
+
+**自助修复**：
+
+- 等到第二天 0 点自动重置
+- 或去主站升级 endpoint 的 dailyLimit 配额
+
 ## 💡 为什么做这个（设计决策摘要）
 
 - **两套鉴权物理隔离**：MCP token 走专门的 `UserMcpEndpoint` 表 + `mcpEndpointMiddleware`，与浏览器 JWT 完全分离。学员撤销 MCP 入口不影响浏览器登录态，反之亦然。
