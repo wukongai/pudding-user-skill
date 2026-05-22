@@ -1,14 +1,26 @@
 /**
  * 配置加载与校验
  *
- * 学员两个必填环境变量：
- *   - PUDDING_API_URL    布丁后端 base URL（如 https://aixiaoai.cloud）
+ * 学员两个必填环境变量:
+ *   - PUDDING_API_URL    布丁后端 base URL(如 https://aixiaoai.cloud)
  *   - PUDDING_MCP_TOKEN  学员从 /profile/ai-access 复制的认证字符串
  *
- * 任一缺失 → stderr 打印友好提示 + exit(1)（MCP 客户端会展示给学员看）
+ * 任一缺失 → stderr 打印友好提示 + exit(1)
+ *
+ * v2.0.0 新增:SKILL_VERSION 常量,用于网关版本协商
  */
 
+import { readFileSync } from 'fs'
+import { fileURLToPath } from 'url'
+import { dirname, join } from 'path'
+
 const DEFAULT_API_URL = 'https://aixiaoai.cloud'
+const GATEWAY_PATH = '/api/skill/gateway'
+
+// 读 package.json 的 version 作为 SKILL_VERSION
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'))
+const SKILL_VERSION = pkg.version
 
 export function loadConfig() {
   const apiUrl = (process.env.PUDDING_API_URL || DEFAULT_API_URL).replace(/\/$/, '')
@@ -16,14 +28,14 @@ export function loadConfig() {
 
   if (!token) {
     console.error('')
-    console.error('❌ pudding-user-skill 启动失败：缺少 PUDDING_MCP_TOKEN 环境变量')
+    console.error('❌ pudding-user-skill 启动失败:缺少 PUDDING_MCP_TOKEN 环境变量')
     console.error('')
-    console.error('📖 装机步骤：')
+    console.error('📖 装机步骤:')
     console.error('   1. 浏览器登录布丁 https://aixiaoai.cloud')
     console.error('   2. 进个人中心 → AI 接入 → 一键生成专属字符串')
-    console.error('   3. 复制 token，配置到 MCP 客户端的 env 里')
+    console.error('   3. 复制 token,配置到 MCP 客户端的 env 里')
     console.error('')
-    console.error('   示例（Claude Desktop / Cursor / Claude Code 通用）：')
+    console.error('   示例(Claude Desktop / Cursor / Claude Code 通用):')
     console.error('   {')
     console.error('     "mcpServers": {')
     console.error('       "pudding": {')
@@ -40,5 +52,12 @@ export function loadConfig() {
     process.exit(1)
   }
 
-  return { apiUrl, token }
+  return {
+    apiUrl,
+    token,
+    gatewayPath: GATEWAY_PATH,
+    skillVersion: SKILL_VERSION,
+  }
 }
+
+export { GATEWAY_PATH, SKILL_VERSION }

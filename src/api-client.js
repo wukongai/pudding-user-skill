@@ -1,80 +1,119 @@
 /**
- * axios 包装 — 调布丁后端 /api/skill-public/* 端点
+ * v2.0.0 网关单一调用 + Envelope 响应解构
  *
- * 设计要点：
- *   - 单例 client（首次 createApiClient 时初始化，后续 tool 直接 import）
- *   - Bearer token 头（也支持 X-MCP-Token，看后端中间件 4 种方式哪种最稳）
- *   - 错误码 → 学员友好提示（401/403/429/5xx 各不同）
- *   - timeout 15s（避免 AI 客户端长时间等待）
+ * 设计要点:
+ *   - 唯一调用入口:callGateway(apiName, params)
+ *   - POST /api/skill/gateway with body { api_name, skill_version, ...params }
+ *   - 解构 envelope:{ data, meta, links, errcode, errmsg }
+ *   - upgrade_info 检测 → 抛升级引导(强制砍刀)
+ *   - errcode 非 0 → 抛包含 errmsg 的友好错误
+ *   - 返回完整 envelope 给 tool(让 tool 把 links 透传给 LLM)
+ *
+ * v1.x → v2.0.0 breaking changes:
+ *   - 旧 callApi(method, path, options) 删除
+ *   - 旧 6 个分散 endpoint 全部弃用
+ *   - 所有 tool 都走 callGateway,api_name 在 body
  */
 
 import axios from 'axios'
 
 let _client = null
+let _config = null
 
-export function createApiClient({ apiUrl, token }) {
+export function createApiClient(config) {
+  _config = config
   _client = axios.create({
-    baseURL: apiUrl,
+    baseURL: config.apiUrl,
     timeout: 15_000,
     headers: {
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${config.token}`,
       'Content-Type': 'application/json',
-      'User-Agent': 'pudding-user-skill/0.1.0',
+      'User-Agent': `pudding-user-skill/${config.skillVersion}`,
     },
+    // 所有 HTTP status 都拿到 res.data,自己判 envelope errcode
+    validateStatus: () => true,
   })
   return _client
 }
 
 export function getApiClient() {
   if (!_client) {
-    throw new Error('API client 未初始化 — 请先调 createApiClient({ apiUrl, token })')
+    throw new Error('API client 未初始化 — 请先调 createApiClient(config)')
   }
   return _client
 }
 
 /**
- * 统一调用 + 错误翻译
- * 把 axios 报错翻译成对 AI 友好的中文提示，AI 看到后能直接转告学员
+ * 唯一网关调用函数
+ * @param {string} apiName - 例 'student.camps.list'
+ * @param {object} [params={}] - 业务参数(平铺,会与 api_name + skill_version 合并)
+ * @returns {Promise<object>} envelope: { data, meta, links, errcode, errmsg }
+ * @throws {Error} 网络错误 / 401 / envelope errcode 非 0 / upgrade_info 升级强制
  */
-export async function callApi(method, path, options = {}) {
+export async function callGateway(apiName, params = {}) {
   const client = getApiClient()
+  const config = _config
+
+  const body = {
+    api_name: apiName,
+    skill_version: config.skillVersion,
+    ...params,
+  }
+
+  let res
   try {
-    const res = await client.request({ method, url: path, ...options })
-    return res.data
+    res = await client.post(config.gatewayPath, body)
   } catch (err) {
-    if (err.response) {
-      const status = err.response.status
-      const serverMessage = err.response.data?.error || err.response.statusText
-      if (status === 401) {
-        throw new Error(
-          `布丁认证失败（${serverMessage}）。请提醒学员去布丁 https://aixiaoai.cloud/profile/ai-access 重新生成 token，` +
-          `然后更新 PUDDING_MCP_TOKEN 环境变量。`,
-        )
-      }
-      if (status === 403) {
-        throw new Error(
-          `权限不足（${serverMessage}）。该操作可能需要学员先在布丁主站报名对应训练营。`,
-        )
-      }
-      if (status === 404) {
-        throw new Error(`资源不存在（${serverMessage}）。`)
-      }
-      if (status === 429) {
-        throw new Error(`已到今日调用上限（${serverMessage}）。请明日 0 点（北京时间）后重试。`)
-      }
-      if (status >= 500) {
-        throw new Error(`布丁服务器内部错误（HTTP ${status}: ${serverMessage}）。请稍后重试或告知运营。`)
-      }
-      throw new Error(`HTTP ${status}: ${serverMessage}`)
-    }
+    // 网络层错误
     if (err.code === 'ECONNABORTED') {
-      throw new Error(`布丁服务器响应超时（>15s）。可能是网络问题或服务器繁忙，稍后重试。`)
+      throw new Error('布丁服务器响应超时(>15s)。可能是网络问题或服务器繁忙,稍后重试。')
     }
     if (err.code === 'ENOTFOUND' || err.code === 'ECONNREFUSED') {
       throw new Error(
-        `无法连接到布丁服务器 ${client.defaults.baseURL}。请检查 PUDDING_API_URL 是否正确（生产值：https://aixiaoai.cloud）`,
+        `无法连接到布丁服务器 ${client.defaults.baseURL}。` +
+          '请检查 PUDDING_API_URL 是否正确(生产值:https://aixiaoai.cloud)',
       )
     }
-    throw new Error(`未知错误：${err.message}`)
+    throw new Error(`网关请求失败:${err.message}`)
   }
+
+  // HTTP 层错误(理论上 envelope 设计成所有错误都 200,但如果是 401 / 5xx 等服务器级错误仍走这里)
+  if (res.status === 401) {
+    throw new Error(
+      '布丁认证失败(HTTP 401)。请提醒学员去 https://aixiaoai.cloud/profile/ai-access 重新生成 token,' +
+        '然后更新 PUDDING_MCP_TOKEN 环境变量。',
+    )
+  }
+  if (res.status >= 500) {
+    throw new Error(
+      `布丁服务器内部错误(HTTP ${res.status})。请稍后重试或告知运营。`,
+    )
+  }
+  if (res.status !== 200) {
+    throw new Error(`网关返回非 200 状态(HTTP ${res.status}):${res.statusText}`)
+  }
+
+  // 解 envelope
+  const envelope = res.data
+  if (!envelope || typeof envelope !== 'object') {
+    throw new Error('网关返回格式异常(非 envelope)')
+  }
+
+  // 1. 升级检测(强制砍刀,在 errcode 检查之前)
+  if (envelope.meta?.upgrade_info?.required) {
+    const info = envelope.meta.upgrade_info
+    throw new Error(
+      `客户端版本过低,需升级 pudding-user-skill 到 ${info.min_version} 或更高。\n` +
+        `升级命令:${info.install_hint}\n` +
+        `详情:${info.message}`,
+    )
+  }
+
+  // 2. errcode 检查(0 = 成功)
+  if (envelope.errcode !== 0) {
+    throw new Error(envelope.errmsg || `未知错误(errcode=${envelope.errcode})`)
+  }
+
+  // 3. 返回完整 envelope(tool handler 决定要 data / links / meta 哪些字段)
+  return envelope
 }

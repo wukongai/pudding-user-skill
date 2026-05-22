@@ -36,7 +36,7 @@ createApiClient(config)
 const server = new Server(
   {
     name: 'pudding-user-skill',
-    version: '0.1.0',
+    version: config.skillVersion,  // v2.0.0 起跟 package.json version 同步
   },
   {
     capabilities: {
@@ -108,7 +108,7 @@ async function main() {
   await server.connect(transport)
   // stderr 启动日志（不污染 stdout MCP 通道）
   console.error(
-    `[pudding-user-skill] MCP server 已启动 (${ALL_TOOLS.length} tools) → ${config.apiUrl}`,
+    `[pudding-user-skill v${config.skillVersion}] MCP server 已启动 (${ALL_TOOLS.length} tools) → ${config.apiUrl}${config.gatewayPath}`,
   )
 }
 
